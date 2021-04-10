@@ -86,7 +86,35 @@ pub(crate) fn handle_signal(tim: &syn::TraitItemMethod) -> Signal {
         proc_macro_error::abort!(w, "gobject_signal_properties unexpected")
     }
 
-    // tim.sig.inputs
+    let receiver = tim.sig.receiver();
+    if let None = receiver {
+        proc_macro_error::abort!(
+            tim.sig,
+            "gobject_signal_properties signal first argument must be &self"
+        )
+    }
+
+    let receiver = receiver.unwrap();
+    match receiver {
+        syn::FnArg::Typed(x) => proc_macro_error::abort!(
+            x,
+            "gobject_signal_properties signal first argument must be &self"
+        ),
+        syn::FnArg::Receiver(receiver) => {
+            if !receiver.attrs.is_empty() {
+                proc_macro_error::abort!(
+                    receiver,
+                    "gobject_signal_properties no attributes allowed"
+                )
+            }
+            if receiver.reference.is_none() || receiver.mutability.is_some() {
+                proc_macro_error::abort!(
+                    receiver,
+                    "gobject_signal_properties first argument must be &self"
+                )
+            }
+        }
+    }
 
     if let Some(v) = &tim.sig.variadic {
         proc_macro_error::abort!(v, "gobject_signal_properties unsupported")
