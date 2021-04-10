@@ -1,8 +1,8 @@
-use gtk4::{glib::subclass::Signal};
 use gtk4::glib;
+use gtk4::glib::subclass::Signal;
 
-use glib::subclass::prelude::*;
 use glib::once_cell::sync::OnceCell;
+use glib::subclass::prelude::*;
 #[derive(Default)]
 pub struct LoginWidgetImp {}
 
@@ -19,16 +19,14 @@ impl gtk4::subclass::widget::WidgetImpl for LoginWidgetImp {}
 
 impl glib::subclass::object::ObjectImpl for LoginWidgetImp {
     fn properties() -> &'static [glib::ParamSpec] {
-        super::_todo_change_name_property_build()
+        super::MyWidgetObjectSubclassBuilder::properties()
     }
 
     /// Signals installed for this type.
     fn signals() -> &'static [Signal] {
         static SIGNALS: OnceCell<Vec<Signal>> = OnceCell::new();
 
-        SIGNALS.get_or_init(|| {
-            vec![]
-        })
+        SIGNALS.get_or_init(|| vec![])
     }
 
     fn get_property(
@@ -49,5 +47,5 @@ impl glib::subclass::object::ObjectImpl for LoginWidgetImp {
         _pspec: &glib::ParamSpec,
     ) {
         dbg!("Set_property {:?}", _value);
-        }
     }
+}
