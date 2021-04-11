@@ -10,7 +10,7 @@ gtk4::glib::wrapper! {
 #[gobject_signal_properties]
 trait MyWidget {
     #[signal]
-    fn my_signal(&self, n: u64, y: gtk4::Box) -> i64;
+    fn my_signal(&self, args: u64, args2: gtk4::Box);
     //    TODO: {  default class handler }
     #[property]
     //    TODO: #[nick("A")]
@@ -25,13 +25,12 @@ trait MyWidget {
 fn main() {
     gtk4::init();
 
-    let x = gtk4::glib::Object::new::<MyWidget>(&[]).unwrap();
+    let x: MyWidget = gtk4::glib::Object::new::<MyWidget>(&[]).unwrap();
     let y = x.get_my_property();
     let z = x.get_another_property();
 
     dbg!(y);
     dbg!(z);
 
-    //TODO:
-    //x.connect_my_signal();
+    x.connect_my_signal(|x, y| {});
 }

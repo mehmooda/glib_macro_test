@@ -31,10 +31,9 @@ pub fn gobject_signal_properties(attr: TokenStream, _item: TokenStream) -> Token
     let pbuilder = property::builder(&properties);
 
     let sverify = signal::verifications(&signals);
-    //let sdef = signal::definitions(&signals);
-    //let simpl = signal::implementations(&signals);
-    //let sbuilder = signal::builder(&signals);
-    
+    let sdef = signal::definitions(&signals);
+    let simpl = signal::implementations(&signals);
+    let sbuilder = signal::builder(&signals);
 
     let object = item_trait.ident;
     let objectext = format_ident!("{}Ext", object);
@@ -42,39 +41,39 @@ pub fn gobject_signal_properties(attr: TokenStream, _item: TokenStream) -> Token
     let impl_mod = format_ident!("__impl_gobject_properties_{}", object);
 
     quote::quote!(
-            //TODO: GivePropertyBuilderName
-            struct #objectbuilder;
-            impl #objectbuilder {
-                #pbuilder
-    //          #sbuilder
-            }
-
-            // Will ensure object is a defined type or error;
-            impl #object {}
-
-            mod #impl_mod {
-                #![allow(non_snake_case)]
-                fn verify_is_glib_object<T: #glib::IsA<#glib::Object>>(){}
-                fn verify_is_glib_FromValueOptional<'a, T: #glib::value::FromValueOptional<'a>>(){}
-                fn verify_is_glib_ToValueOptional<T: #glib::value::ToValue>(){}
-
-                fn test() {
-                    verify_is_glib_object::<super::#object>();
-                    #pverify
-                    #sverify
+                //TODO: GivePropertyBuilderName
+                struct #objectbuilder;
+                impl #objectbuilder {
+                   #pbuilder
+                   #sbuilder
                 }
-            }
 
-            trait #objectext {
-                #pdef
-    //            #sdef
-            }
+                // Will ensure object is a defined type or error;
+                impl #object {}
 
-            impl<T: #glib::IsA<#object>> #objectext for T {
-                #pimpl
-    //            #simpl
-            }
-        )
+                mod #impl_mod {
+                    #![allow(non_snake_case)]
+                    fn verify_is_glib_object<T: #glib::IsA<#glib::Object>>(){}
+                    fn verify_is_glib_StaticType<T: #glib::StaticType>(){}
+    //                fn verify_is_glib_ToValueOptional<T: #glib::value::ToValue>(){}
+
+                    fn test() {
+                        verify_is_glib_object::<super::#object>();
+                        #pverify
+                        #sverify
+                    }
+                }
+
+                trait #objectext {
+                    #pdef
+                    #sdef
+                }
+
+                impl<T: #glib::IsA<#object>> #objectext for T {
+                    #pimpl
+                    #simpl
+                }
+            )
     .into()
 }
 

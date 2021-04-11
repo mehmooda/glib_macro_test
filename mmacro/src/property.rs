@@ -81,23 +81,12 @@ pub(crate) struct Property {
     pub span: proc_macro2::Span,
 }
 
-pub(crate) fn get_tokenstreams(properties: &[Property]) -> (TokenStream, TokenStream, TokenStream) {
-    let property_verify = quote! {};
-
-    let property_def = quote! {};
-
-    let property_impl = quote! {};
-
-    (property_verify, property_def, property_impl)
-}
-
 pub(crate) fn verifications(properties: &[Property]) -> TokenStream {
     let property_type = properties.iter().map(|x| &x.object);
     quote! {
         #(
             // Verify
-            verify_is_glib_FromValueOptional::<#property_type>();
-            verify_is_glib_ToValueOptional::<#property_type>();
+            verify_is_glib_StaticType::<#property_type>();
         )*
     }
 }

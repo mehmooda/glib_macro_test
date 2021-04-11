@@ -151,28 +151,124 @@ fn parse_signal_definition(sig: &syn::Signature) -> (super::ParamSpecName, Vec<F
 }
 
 pub(crate) fn verifications(signals: &[Signal]) -> TokenStream {
-    let verify = signals.iter().map(|s| {
-        let output = &s.output;
-        let inputs = s.inputs.iter().map(|f| {
-            if let FnArg::Typed(x) = f {
-                &x.ty
-            } else {
-                proc_macro_error::abort!(f, "gobject_signal_properties expected type")
+    let verify = signals
+        .iter()
+        .map(|s| {
+            let output = &s.output;
+            let inputs = s.inputs.iter().map(|f| {
+                if let FnArg::Typed(x) = f {
+                    &x.ty
+                } else {
+                    proc_macro_error::abort!(f, "gobject_signal_properties expected type")
+                }
+            });
+            quote! {
+                verify_is_glib_StaticType::<#output>();
+                #(
+                    verify_is_glib_StaticType::<#inputs>();
+                )*
             }
-        });
-        quote! {
-            verify_is_glib_FromValueOptional::<#output>();
-            #(
-                verify_is_glib_FromValueOptional::<#inputs>();
-                verify_is_glib_ToValueOptional::<#inputs>();
-            )*
-        }
-    }
-    ).collect::<Vec<_>>();
+        })
+        .collect::<Vec<_>>();
 
-    quote!{
+    quote! {
         #(
             #verify
         )*
+    }
+}
+
+pub(crate) fn definitions(signals: &[Signal]) -> TokenStream {
+    let connect_signal = signals
+        .iter()
+        .map(|s| quote::format_ident!("connect_{}", s.name.snake_case()));
+    let emit_signal = signals
+        .iter()
+        .map(|s| quote::format_ident!("emit_{}", s.name.snake_case()));
+
+    let args = signals.iter().map(|s| &s.inputs);
+    let arg_types = signals.iter().map(|s| {
+        s.inputs
+            .iter()
+            .map(|i| match i {
+                FnArg::Typed(p) => p.ty.clone(),
+                _ => unreachable!(),
+            })
+            .collect::<Vec<_>>()
+    });
+
+    let out = signals.iter().map(|s| &s.output);
+    quote! {
+        #(
+            fn #connect_signal<F: Fn(#(#arg_types),*) -> #out>(&self, callback: F);
+            fn #emit_signal(#(#args),*);
+        )*
+    }
+}
+
+pub(crate) fn implementations(signals: &[Signal]) -> TokenStream {
+    let connect_signal = signals
+        .iter()
+        .map(|s| quote::format_ident!("connect_{}", s.name.snake_case()));
+    let emit_signal = signals
+        .iter()
+        .map(|s| quote::format_ident!("emit_{}", s.name.snake_case()));
+    let args = signals.iter().map(|s| &s.inputs);
+    let arg_types = signals.iter().map(|s| {
+        s.inputs
+            .iter()
+            .map(|i| match i {
+                FnArg::Typed(p) => p.ty.clone(),
+                _ => unreachable!(),
+            })
+            .collect::<Vec<_>>()
+    });
+    let out = signals.iter().map(|s| &s.output);
+
+    quote! {
+        #(
+            fn #connect_signal<F: Fn(#(#arg_types),*) -> #out>(&self, callback: F){
+                unimplemented!()
+            }
+            fn #emit_signal(#(#args),*) -> #out{
+                unimplemented!()
+            }
+        )*
+    }
+}
+
+pub(crate) fn builder(signals: &[Signal]) -> TokenStream {
+    let glib = super::get_glib();
+    // TODO: Parse property type and call correct paramspec builder for type
+    let signal_name = signals.iter().map(|x| x.name.kebab_case());
+
+    let arg_types = signals.iter().map(|s| {
+        s.inputs
+            .iter()
+            .map(|i| match i {
+                FnArg::Typed(p) => p.ty.clone(),
+                _ => unreachable!(),
+            })
+            .collect::<Vec<_>>()
+    });
+
+    let out = signals.iter().map(|s| &s.output);
+
+    quote! {
+        fn signals() -> &'static [#glib ::subclass::Signal] {
+            static SIGNALS: #glib ::once_cell::sync::OnceCell<Vec<#glib ::subclass::Signal>> = #glib ::once_cell::sync::OnceCell::new();
+
+            SIGNALS.get_or_init( || vec![
+            #(
+                #glib ::subclass::Signal::builder(#signal_name,
+                    &[
+                        #(
+                        <#arg_types as #glib ::types::StaticType>::static_type().into()
+                        ),*
+                    ],
+                    <#out as #glib ::types::StaticType>::static_type().into()
+                ).build()
+            ),*])
+        }
     }
 }
