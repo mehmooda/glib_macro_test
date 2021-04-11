@@ -1,3 +1,43 @@
+pub trait TurnOptionIntoInner {
+    fn is_option(&self) -> bool;
+    fn get_inner_type(&self) -> &Self;
+    fn inner_if_option(&self) -> &Self {
+        if self.is_option() {
+            self.get_inner_type()
+        } else {
+            self
+        }
+    }
+}
+
+impl TurnOptionIntoInner for syn::Type {
+    fn is_option(&self) -> bool {
+        if let syn::Type::Path(tp) = self {
+            if tp.path.segments[0].ident == "Option" {
+                return true
+            }
+        }
+        false
+    }
+    
+    fn get_inner_type(&self) -> &Self {
+        if let syn::Type::Path(tp) = self {
+            if tp.path.segments[0].ident != "Option" {
+                proc_macro_error::abort!(self, "Not Option")
+            }
+            if let syn::PathArguments::AngleBracketed(abga) = &tp.path.segments[0].arguments {
+                if let syn::GenericArgument::Type(inner) = &abga.args[0] {
+                    return &inner
+                }
+                proc_macro_error::abort!(self, "Generic Inner Type Error")
+            }
+            proc_macro_error::abort!(self, "PathArguments::AngleBracketed Error")
+        }
+        proc_macro_error::abort!(self, "Not a Path")
+    }
+    
+}
+
 pub fn get_glib() -> proc_macro2::TokenStream {
     use proc_macro_crate::*;
 

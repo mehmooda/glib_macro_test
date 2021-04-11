@@ -10,7 +10,7 @@ gtk4::glib::wrapper! {
 #[gobject_signal_properties]
 trait MyWidget {
     #[signal]
-    fn my_signal(&self, args: u64, args2: gtk4::Box);
+    fn my_signal(&self, arg1: i64, arg2: Option<u32>, arg3: Option<gtk4::Box>, arg4: gtk4::glib::Object);
     //    TODO: {  default class handler }
     #[property]
     //    TODO: #[nick("A")]
@@ -32,5 +32,8 @@ fn main() {
     dbg!(y);
     dbg!(z);
 
-    x.connect_my_signal(|x, y| {});
+    x.connect_my_signal(|s, a1, a2, a3, a4| {
+
+    });
+
 }

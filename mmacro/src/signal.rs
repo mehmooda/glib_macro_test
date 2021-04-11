@@ -4,6 +4,8 @@ use proc_macro2::TokenStream;
 use quote::quote;
 use syn::{FnArg, ReturnType};
 
+use crate::TurnOptionIntoInner;
+
 pub(crate) struct Signal {
     name: crate::ParamSpecName,
     inputs: Vec<FnArg>,
@@ -154,10 +156,10 @@ pub(crate) fn verifications(signals: &[Signal]) -> TokenStream {
     let verify = signals
         .iter()
         .map(|s| {
-            let output = &s.output;
+            let output = s.output.inner_if_option();
             let inputs = s.inputs.iter().map(|f| {
                 if let FnArg::Typed(x) = f {
-                    &x.ty
+                    x.ty.inner_if_option()
                 } else {
                     proc_macro_error::abort!(f, "gobject_signal_properties expected type")
                 }
@@ -200,13 +202,16 @@ pub(crate) fn definitions(signals: &[Signal]) -> TokenStream {
     let out = signals.iter().map(|s| &s.output);
     quote! {
         #(
-            fn #connect_signal<F: Fn(#(#arg_types),*) -> #out>(&self, callback: F);
+            fn #connect_signal<F: Fn(&Self, #(#arg_types),*) -> #out + 'static>(&self, callback: F);
             fn #emit_signal(#(#args),*);
         )*
     }
 }
 
 pub(crate) fn implementations(signals: &[Signal]) -> TokenStream {
+    let glib = super::get_glib();
+
+    let signal = signals.iter().map(|s| s.name.kebab_case());
     let connect_signal = signals
         .iter()
         .map(|s| quote::format_ident!("connect_{}", s.name.snake_case()));
@@ -214,21 +219,52 @@ pub(crate) fn implementations(signals: &[Signal]) -> TokenStream {
         .iter()
         .map(|s| quote::format_ident!("emit_{}", s.name.snake_case()));
     let args = signals.iter().map(|s| &s.inputs);
-    let arg_types = signals.iter().map(|s| {
-        s.inputs
-            .iter()
-            .map(|i| match i {
-                FnArg::Typed(p) => p.ty.clone(),
-                _ => unreachable!(),
-            })
+    let arg_types = signals
+        .iter()
+        .map(|s| {
+            s.inputs
+                .iter()
+                .map(|i| match i {
+                    FnArg::Typed(p) => dbg!(p.ty.clone()),
+                    _ => unreachable!(),
+                })
+                .collect::<Vec<_>>()
+        })
+        .collect::<Vec<_>>();
+
+    let inner_arg_types = arg_types
+        .iter()
+        .map(|x| x.iter().map(|z| z.inner_if_option()).collect::<Vec<_>>());
+    let unwrap_if_inner = arg_types.iter().map(|z| z.iter().map(|t|{!t.is_option()}).map(|t| {if t {
+        quote!{.unwrap()}
+    } else {
+        quote!{}
+    }
+    }).collect::<Vec<_>>());
+
+
+    let numbers = (0..signals.len()).map(|z| {
+        (0..signals[z].inputs.len())
+            .map(syn::Index::from)
             .collect::<Vec<_>>()
     });
     let out = signals.iter().map(|s| &s.output);
 
     quote! {
         #(
-            fn #connect_signal<F: Fn(#(#arg_types),*) -> #out>(&self, callback: F){
-                unimplemented!()
+            fn #connect_signal<F: Fn(&Self, #(#arg_types),*) -> #out + 'static>(&self, callback: F){
+                use #glib ::ObjectExt;
+                self.as_ref().connect_local(#signal, false, move |args| {
+                    let converted_arg = (
+                        #(
+                            args[#numbers + 1].get::<#inner_arg_types>().unwrap()
+                            // Currently is Option<T>
+                            #unwrap_if_inner
+                        ),*
+                    ,);
+                    callback(&args[0].get().unwrap().unwrap(),#(converted_arg. #numbers),*);
+                    None
+                }).unwrap();
             }
             fn #emit_signal(#(#args),*) -> #out{
                 unimplemented!()
@@ -246,7 +282,7 @@ pub(crate) fn builder(signals: &[Signal]) -> TokenStream {
         s.inputs
             .iter()
             .map(|i| match i {
-                FnArg::Typed(p) => p.ty.clone(),
+                FnArg::Typed(p) => p.ty.inner_if_option().clone(),
                 _ => unreachable!(),
             })
             .collect::<Vec<_>>()
