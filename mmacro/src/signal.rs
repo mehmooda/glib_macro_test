@@ -1,19 +1,52 @@
 #![allow(dead_code, unreachable_code)]
 
+use proc_macro2::TokenStream;
+use quote::quote;
+use syn::{FnArg, ReturnType};
+
 pub(crate) struct Signal {
     name: crate::ParamSpecName,
-    output: syn::ReturnType,
+    inputs: Vec<FnArg>,
+    output: syn::Type,
+    //
 }
 
 pub(crate) fn handle_signal(tim: &syn::TraitItemMethod) -> Signal {
-    #[derive(Default)]
-    struct SignalAttributes {
-        magic: bool,
-        class_handler_flags: bool,
+    let attributes = parse_signal_attributes(&tim.attrs);
+
+    if !attributes.magic {
+        proc_macro_error::abort!(
+            tim.sig,
+            "gobject_signal_properties: Missing signal attribute"
+        )
     }
 
+    if let Some(b) = &tim.default {
+        proc_macro_error::abort!(
+            b,
+            "gobject_signal_properties: default class handler unimplemented"
+        )
+    }
+
+    let (name, inputs, output) = parse_signal_definition(&tim.sig);
+
+    Signal {
+        name,
+        inputs,
+        output,
+    }
+}
+
+#[derive(Default)]
+struct SignalAttributes {
+    magic: bool,
+    class_handler_flags: bool,
+}
+
+fn parse_signal_attributes(attrs: &[syn::Attribute]) -> SignalAttributes {
     let mut attributes = SignalAttributes::default();
-    for a in &tim.attrs {
+
+    for a in attrs {
         if let Some(x) = a.path.leading_colon {
             proc_macro_error::abort!(x, "gobject_signal_properties unexpected")
         }
@@ -30,72 +63,58 @@ pub(crate) fn handle_signal(tim: &syn::TraitItemMethod) -> Signal {
             }
             // #[class_handler(run_first, run_last, run_cleanup)]
             "class_handler" => {
-                attributes.class_handler_flags = true;
+                proc_macro_error::abort!(
+                    a,
+                    "gobject_signal_properties: default class handler unimplemented"
+                );
+
+                //                attributes.class_handler_flags = true;
             }
             _ => proc_macro_error::abort!(a.path, "gobject_signal_properties unexpected"),
         }
         //        println!("{:?}", attribute_name)
     }
 
-    if !attributes.magic {
-        proc_macro_error::abort!(tim, "gobject_signal_properties: missing signal attribute")
-    }
+    attributes
+}
 
-    if attributes.class_handler_flags {
-        proc_macro_error::abort!(
-            tim,
-            "gobject_signal_properties: default class handler unimplemented"
-        )
-    }
-
-    if let Some(b) = &tim.default {
-        proc_macro_error::abort!(
-            b,
-            "gobject_signal_properties: default class handler unimplemented"
-        )
-    }
-
-    if let Some(c) = tim.sig.constness {
+fn parse_signal_definition(sig: &syn::Signature) -> (super::ParamSpecName, Vec<FnArg>, syn::Type) {
+    if let Some(c) = sig.constness {
         proc_macro_error::abort!(c, "gobject_signal_properties: unsupported")
     }
 
-    if let Some(a) = tim.sig.asyncness {
+    if let Some(a) = sig.asyncness {
         proc_macro_error::abort!(a, "gobject_signal_properties: unsupported")
     }
 
-    if let Some(a) = tim.sig.unsafety {
+    if let Some(a) = sig.unsafety {
         proc_macro_error::abort!(a, "gobject_signal_properties: unsupported")
     }
 
-    if let Some(a) = &tim.sig.abi {
+    if let Some(a) = &sig.abi {
         proc_macro_error::abort!(a, "gobject_signal_properties: unsupported")
     }
 
-    let name = crate::ParamSpecName::new(&tim.sig.ident).unwrap_or_else(|()| {
-        proc_macro_error::abort!(tim.sig.ident, "gobject_signal_properties: invalid name")
+    let name = crate::ParamSpecName::new(&sig.ident).unwrap_or_else(|()| {
+        proc_macro_error::abort!(sig.ident, "gobject_signal_properties: invalid name")
     });
 
-    if let Some(_) = tim.sig.generics.lt_token {
-        proc_macro_error::abort!(
-            tim.sig.generics.params,
-            "gobject_signal_properties unexpected"
-        )
+    if let Some(_) = sig.generics.lt_token {
+        proc_macro_error::abort!(sig.generics.params, "gobject_signal_properties unexpected")
     }
 
-    if let Some(w) = &tim.sig.generics.where_clause {
+    if let Some(w) = &sig.generics.where_clause {
         proc_macro_error::abort!(w, "gobject_signal_properties unexpected")
     }
 
-    let receiver = tim.sig.receiver();
-    if let None = receiver {
+    if sig.inputs.len() == 0 {
         proc_macro_error::abort!(
-            tim.sig,
+            sig,
             "gobject_signal_properties signal first argument must be &self"
         )
     }
 
-    let receiver = receiver.unwrap();
-    match receiver {
+    match &sig.inputs[0] {
         syn::FnArg::Typed(x) => proc_macro_error::abort!(
             x,
             "gobject_signal_properties signal first argument must be &self"
@@ -116,12 +135,44 @@ pub(crate) fn handle_signal(tim: &syn::TraitItemMethod) -> Signal {
         }
     }
 
-    if let Some(v) = &tim.sig.variadic {
+    let types = sig.inputs.iter().skip(1).cloned().collect::<Vec<_>>();
+
+    if let Some(v) = &sig.variadic {
         proc_macro_error::abort!(v, "gobject_signal_properties unsupported")
     }
 
-    Signal {
-        name,
-        output: tim.sig.output.clone(),
+    let output = if let ReturnType::Type(_, x) = &sig.output {
+        *x.clone()
+    } else {
+        syn::parse2(quote!(())).unwrap()
+    };
+
+    (name, types, output)
+}
+
+pub(crate) fn verifications(signals: &[Signal]) -> TokenStream {
+    let verify = signals.iter().map(|s| {
+        let output = &s.output;
+        let inputs = s.inputs.iter().map(|f| {
+            if let FnArg::Typed(x) = f {
+                &x.ty
+            } else {
+                proc_macro_error::abort!(f, "gobject_signal_properties expected type")
+            }
+        });
+        quote! {
+            verify_is_glib_FromValueOptional::<#output>();
+            #(
+                verify_is_glib_FromValueOptional::<#inputs>();
+                verify_is_glib_ToValueOptional::<#inputs>();
+            )*
+        }
+    }
+    ).collect::<Vec<_>>();
+
+    quote!{
+        #(
+            #verify
+        )*
     }
 }

@@ -30,6 +30,12 @@ pub fn gobject_signal_properties(attr: TokenStream, _item: TokenStream) -> Token
     let pimpl = property::implementations(&properties);
     let pbuilder = property::builder(&properties);
 
+    let sverify = signal::verifications(&signals);
+    //let sdef = signal::definitions(&signals);
+    //let simpl = signal::implementations(&signals);
+    //let sbuilder = signal::builder(&signals);
+    
+
     let object = item_trait.ident;
     let objectext = format_ident!("{}Ext", object);
     let objectbuilder = format_ident!("{}ObjectSubclassBuilder", object);
@@ -55,7 +61,7 @@ pub fn gobject_signal_properties(attr: TokenStream, _item: TokenStream) -> Token
                 fn test() {
                     verify_is_glib_object::<super::#object>();
                     #pverify
-    //                #sverify
+                    #sverify
                 }
             }
 

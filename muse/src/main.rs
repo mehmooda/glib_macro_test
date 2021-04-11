@@ -10,7 +10,7 @@ gtk4::glib::wrapper! {
 #[gobject_signal_properties]
 trait MyWidget {
     #[signal]
-    fn my_signal(&self);
+    fn my_signal(&self, n: u64, y: gtk4::Box) -> i64;
     //    TODO: {  default class handler }
     #[property]
     //    TODO: #[nick("A")]
