@@ -203,7 +203,7 @@ pub(crate) fn definitions(signals: &[Signal]) -> TokenStream {
     quote! {
         #(
             fn #connect_signal<F: Fn(&Self, #(#arg_types),*) -> #out + 'static>(&self, callback: F);
-            fn #emit_signal(#(#args),*);
+            fn #emit_signal(&self, #(#args),*);
         )*
     }
 }
@@ -235,13 +235,18 @@ pub(crate) fn implementations(signals: &[Signal]) -> TokenStream {
     let inner_arg_types = arg_types
         .iter()
         .map(|x| x.iter().map(|z| z.inner_if_option()).collect::<Vec<_>>());
-    let unwrap_if_inner = arg_types.iter().map(|z| z.iter().map(|t|{!t.is_option()}).map(|t| {if t {
-        quote!{.unwrap()}
-    } else {
-        quote!{}
-    }
-    }).collect::<Vec<_>>());
-
+    let unwrap_if_inner = arg_types.iter().map(|z| {
+        z.iter()
+            .map(|t| !t.is_option())
+            .map(|t| {
+                if t {
+                    quote! {.unwrap()}
+                } else {
+                    quote! {}
+                }
+            })
+            .collect::<Vec<_>>()
+    });
 
     let numbers = (0..signals.len()).map(|z| {
         (0..signals[z].inputs.len())
@@ -249,6 +254,19 @@ pub(crate) fn implementations(signals: &[Signal]) -> TokenStream {
             .collect::<Vec<_>>()
     });
     let out = signals.iter().map(|s| &s.output);
+
+    let get_name = |t: &FnArg| {
+        if let FnArg::Typed(p) = &t {
+            if let syn::Pat::Ident(pi) = &*p.pat {
+                return pi.ident.clone();
+            }
+        }
+        proc_macro_error::abort_call_site!("Expected ident in fnarg")
+    };
+
+    let arg_names = signals
+        .iter()
+        .map(|s| s.inputs.iter().map(get_name).collect::<Vec<_>>());
 
     quote! {
         #(
@@ -266,8 +284,15 @@ pub(crate) fn implementations(signals: &[Signal]) -> TokenStream {
                     None
                 }).unwrap();
             }
-            fn #emit_signal(#(#args),*) -> #out{
-                unimplemented!()
+            fn #emit_signal(&self, #(#args),*) -> #out {
+                use #glib ::value::ToValue;
+                use #glib ::ObjectExt;
+                self.as_ref().emit_by_name_with_values(
+                    #signal,
+                    &[#(
+                        #arg_names.to_value()
+                    ),*]
+                );
             }
         )*
     }

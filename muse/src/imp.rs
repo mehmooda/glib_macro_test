@@ -24,9 +24,7 @@ impl glib::subclass::object::ObjectImpl for LoginWidgetImp {
 
     /// Signals installed for this type.
     fn signals() -> &'static [Signal] {
-        static SIGNALS: OnceCell<Vec<Signal>> = OnceCell::new();
-
-        SIGNALS.get_or_init(|| vec![])
+        super::MyWidgetObjectSubclassBuilder::signals()
     }
 
     fn get_property(
