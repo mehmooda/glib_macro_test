@@ -203,9 +203,38 @@ pub(crate) fn definitions(signals: &[Signal]) -> TokenStream {
     quote! {
         #(
             fn #connect_signal<F: Fn(&Self, #(#arg_types),*) -> #out + 'static>(&self, callback: F);
-            fn #emit_signal(&self, #(#args),*);
+            fn #emit_signal(&self, #(#args),*) -> #out;
         )*
     }
+}
+
+fn convert_ret(signal: &Signal) -> TokenStream {
+    if signal.output == syn::parse2(quote!(())).unwrap() {
+        return quote!(None);
+    }
+    if signal.output.is_option() {
+        return quote! {
+        //            None
+                    ret.map(|z| z.to_value())
+                };
+    }
+    return quote! {
+        Some(ret.to_value())
+    };
+}
+
+fn handle_emit_option(signal: &Signal) -> TokenStream {
+    if signal.output == syn::parse2(quote!(())).unwrap() {
+        return quote!(.expect_none("Expected Unit"));
+    }
+    if signal.output.is_option() {
+        return quote! {
+            .map(|z| z.get().unwrap().unwrap())
+        };
+    }
+    return quote! {
+        .unwrap().get().unwrap().unwrap()
+    };
 }
 
 pub(crate) fn implementations(signals: &[Signal]) -> TokenStream {
@@ -225,7 +254,7 @@ pub(crate) fn implementations(signals: &[Signal]) -> TokenStream {
             s.inputs
                 .iter()
                 .map(|i| match i {
-                    FnArg::Typed(p) => dbg!(p.ty.clone()),
+                    FnArg::Typed(p) => p.ty.clone(),
                     _ => unreachable!(),
                 })
                 .collect::<Vec<_>>()
@@ -247,7 +276,6 @@ pub(crate) fn implementations(signals: &[Signal]) -> TokenStream {
             })
             .collect::<Vec<_>>()
     });
-
     let numbers = (0..signals.len()).map(|z| {
         (0..signals[z].inputs.len())
             .map(syn::Index::from)
@@ -268,20 +296,23 @@ pub(crate) fn implementations(signals: &[Signal]) -> TokenStream {
         .iter()
         .map(|s| s.inputs.iter().map(get_name).collect::<Vec<_>>());
 
+    let convert_ret = signals.iter().map(convert_ret);
+    let handle_emit_option = signals.iter().map(handle_emit_option);
+
     quote! {
         #(
             fn #connect_signal<F: Fn(&Self, #(#arg_types),*) -> #out + 'static>(&self, callback: F){
+                use #glib ::value::ToValue;
                 use #glib ::ObjectExt;
                 self.as_ref().connect_local(#signal, false, move |args| {
                     let converted_arg = (
                         #(
                             args[#numbers + 1].get::<#inner_arg_types>().unwrap()
-                            // Currently is Option<T>
                             #unwrap_if_inner
                         ),*
                     ,);
-                    callback(&args[0].get().unwrap().unwrap(),#(converted_arg. #numbers),*);
-                    None
+                    let ret = callback(&args[0].get().unwrap().unwrap(),#(converted_arg. #numbers),*);
+                    #convert_ret
                 }).unwrap();
             }
             fn #emit_signal(&self, #(#args),*) -> #out {
@@ -292,7 +323,8 @@ pub(crate) fn implementations(signals: &[Signal]) -> TokenStream {
                     &[#(
                         #arg_names.to_value()
                     ),*]
-                );
+                ).unwrap()
+                #handle_emit_option
             }
         )*
     }
@@ -313,7 +345,7 @@ pub(crate) fn builder(signals: &[Signal]) -> TokenStream {
             .collect::<Vec<_>>()
     });
 
-    let out = signals.iter().map(|s| &s.output);
+    let out = signals.iter().map(|s| s.output.inner_if_option());
 
     quote! {
         fn signals() -> &'static [#glib ::subclass::Signal] {

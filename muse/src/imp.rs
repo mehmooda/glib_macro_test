@@ -1,7 +1,6 @@
 use gtk4::glib;
 use gtk4::glib::subclass::Signal;
 
-use glib::once_cell::sync::OnceCell;
 use glib::subclass::prelude::*;
 #[derive(Default)]
 pub struct LoginWidgetImp {}
