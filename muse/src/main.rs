@@ -10,7 +10,7 @@ gtk4::glib::wrapper! {
 #[gobject_signal_properties]
 trait MyWidget {
     #[signal]
-    fn my_signal(&self, arg1: i64, arg2: u32, arg3: Option<gtk4::Box>) -> i64;
+    fn my_signal(&self, arg1: i64, arg2: u32, arg3: Option<gtk4::Box>) -> gtk4::Box;
     //    TODO: {  default class handler }
     #[property]
     //    TODO: #[nick("A")]
@@ -39,7 +39,7 @@ fn main() {
         dbg!(a2);
         dbg!(a3);
 
-        3
+        s.clone().upcast()
     });
 
     use gtk4::glib::object::Cast;
