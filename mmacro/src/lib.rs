@@ -7,6 +7,53 @@ mod util;
 
 use util::*;
 
+/// # Usage
+/// ```rust
+/// #[gobject_signal_properties]
+/// trait NewObject {
+///    #[signal]
+///    fn new_signal(&self, arg: u64, second_arg: glib::Object);
+///    #[property]
+///    type new_property = u64;
+/// }
+/// ```
+/// # Generated Code
+/// ```rust
+/// # use glib::Object as NewObject;
+/// struct NewObjectObjectSubClassBuilder {}
+/// impl NewObjectObjectSubClassBuilder {
+///     fn signals() -> &'static [Signal] {
+///         ...
+///     }
+///     fn properties() -> &'static [ParamSpec] {
+///         ...
+///     }
+/// }
+/// trait NewObjectExt {
+///     fn connect_new_signal<F: Fn(&Self, u64, glib::Object) + 'static>(
+///         &self,
+///         signal_handler: F
+///     ) -> SignalHandlerId;
+///
+///     fn emit_new_signal(&self, arg: u64, second_arg: glib::Object);
+///
+///     fn get_new_property(&self) -> u64;
+///
+///     fn set_new_property(&self, arg: u64);
+/// }
+/// impl<T: IsA<NewObject>> NewObjectExt for T {
+///     ...
+/// }
+/// ```
+/// There is also some test code generated which verifies that all types in the
+/// signals and properties are types supported as
+/// [`StaticType`](https://docs.rs/glib/0.10.3/glib/types/trait.StaticType.html)
+/// and can be converted to and from
+/// [`Value`](https://docs.rs/glib/0.10.3/glib/value/struct.Value.html)
+/// # Limitations
+/// Property types must be a fundamental type or Object Subclass. See
+/// [source](../src/mmacro/property.rs.html#99) for all currently supported
+/// types
 #[proc_macro_error::proc_macro_error]
 #[proc_macro_attribute]
 pub fn gobject_signal_properties(attr: TokenStream, _item: TokenStream) -> TokenStream {
@@ -64,7 +111,7 @@ pub fn gobject_signal_properties(attr: TokenStream, _item: TokenStream) -> Token
                     }
                 }
 
-                trait #objectext {
+                pub trait #objectext {
                     #pdef
                     #sdef
                 }

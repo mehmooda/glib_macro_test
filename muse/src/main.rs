@@ -3,8 +3,7 @@ use mmacro::gobject_signal_properties;
 mod imp;
 
 gtk4::glib::wrapper! {
-    pub struct MyWidget(ObjectSubclass<imp::LoginWidgetImp>)
-    @extends gtk4::Box, gtk4::Widget;
+    pub struct MyWidget(ObjectSubclass<imp::LoginWidgetImp>);
 }
 
 #[gobject_signal_properties]

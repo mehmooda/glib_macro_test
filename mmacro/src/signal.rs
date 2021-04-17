@@ -225,7 +225,7 @@ fn convert_ret(signal: &Signal) -> TokenStream {
 
 fn handle_emit_option(signal: &Signal) -> TokenStream {
     if signal.output == syn::parse2(quote!(())).unwrap() {
-        return quote!(.expect_none("Expected Unit"));
+        return quote!(.map(|o| panic!("Expected Unit found {}", o.type_())););
     }
     if signal.output.is_option() {
         return quote! {

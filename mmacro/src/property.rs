@@ -70,6 +70,8 @@ pub(crate) fn handle_property(tit: &syn::TraitItemType) -> Property {
         proc_macro_error::abort!(tit, "gobject_signal_properties property type needed")
     }
 
+
+
     Property {
         name,
         span: syn::spanned::Spanned::span(&tit),
@@ -85,7 +87,8 @@ pub(crate) struct Property {
 
 impl Property {
     fn param_spec_constructor(&self) -> TokenStream {
-        let type_path_ident = if let syn::Type::Path(tp) = &self.prop_type {
+        let ptype = self.prop_type.inner_if_option();
+        let type_path_ident = if let syn::Type::Path(tp) = ptype {
             match &tp.path.segments[0].ident {
                 x => x,
             }
@@ -96,30 +99,30 @@ impl Property {
         let pname = self.name.kebab_case();
 
         match type_path_ident.to_string().as_str() {
-            "bool" => quote! {boolean(#pname,#pname,#pname, false, ParamFlags::READWRITE)},
-            "i8" => quote! {char(#pname,#pname,#pname, i8::MIN, i8::MAX, 0, ParamFlags::READWRITE)},
+            "bool" => quote! {new_boolean(#pname,#pname,#pname, false, ParamFlags::READWRITE)},
+            "i8" => quote! {new_char(#pname,#pname,#pname, i8::MIN, i8::MAX, 0, ParamFlags::READWRITE)},
             "u8" => {
-                quote! {uchar(#pname,#pname,#pname, u8::MIN, u8::MAX, 0, ParamFlags::READWRITE)}
+                quote! {new_uchar(#pname,#pname,#pname, u8::MIN, u8::MAX, 0, ParamFlags::READWRITE)}
             }
             "i32" => {
-                quote! {int(#pname,#pname,#pname, i32::MIN, i32::MAX, 0, ParamFlags::READWRITE)}
+                quote! {new_int(#pname,#pname,#pname, i32::MIN, i32::MAX, 0, ParamFlags::READWRITE)}
             }
             "u32" => {
-                quote! {uint(#pname,#pname,#pname, u32::MIN, u32::MAX, 0, ParamFlags::READWRITE)}
+                quote! {new_uint(#pname,#pname,#pname, u32::MIN, u32::MAX, 0, ParamFlags::READWRITE)}
             }
             "i64" => {
-                quote! {int64(#pname,#pname,#pname, i64::MIN, i64::MAX, 0, ParamFlags::READWRITE)}
+                quote! {new_int64(#pname,#pname,#pname, i64::MIN, i64::MAX, 0, ParamFlags::READWRITE)}
             }
             "u64" => {
-                quote! {uint64(#pname,#pname,#pname, u64::MIN, u64::MAX, 0, ParamFlags::READWRITE)}
+                quote! {new_uint64(#pname,#pname,#pname, u64::MIN, u64::MAX, 0, ParamFlags::READWRITE)}
             }
             "f32" => {
-                quote! {floar(#pname,#pname,#pname, f32::MIN, f32::MAX, 0, ParamFlags::READWRITE)}
+                quote! {new_float(#pname,#pname,#pname, f32::MIN, f32::MAX, 0, ParamFlags::READWRITE)}
             }
             "f64" => {
-                quote! {double(#pname,#pname,#pname, f64::MIN, f64::MAX, 0, ParamFlags::READWRITE)}
+                quote! {new_double(#pname,#pname,#pname, f64::MIN, f64::MAX, 0, ParamFlags::READWRITE)}
             }
-            "String" => quote! {string(#pname,#pname,#pname, None, ParamFlags::READWRITE)},
+            "String" => quote! {new_string(#pname,#pname,#pname, None, ParamFlags::READWRITE)},
             // long > c_long
             // boxed
             // enum_
@@ -132,7 +135,7 @@ impl Property {
             // value_array
             // variant
             _ => {
-                quote! {object(#pname,#pname,#pname, <#type_path_ident as StaticType>::static_type(), ParamFlags::READWRITE)}
+                quote! {new_object(#pname,#pname,#pname, <#ptype as StaticType>::static_type(), ParamFlags::READWRITE)}
             }
         }
     }
@@ -142,7 +145,7 @@ pub(crate) fn verifications(properties: &[Property]) -> TokenStream {
     let property_type = properties.iter().map(|x| x.prop_type.inner_if_option());
     quote! {
         #(
-            // Verify
+           // Verify
             verify_is_glib_StaticType::<#property_type>();
         )*
     }
