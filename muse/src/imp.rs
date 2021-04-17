@@ -33,7 +33,7 @@ impl glib::subclass::object::ObjectImpl for LoginWidgetImp {
         _pspec: &glib::ParamSpec,
     ) -> glib::Value {
         dbg!("Get_property");
-        _pspec.get_name().into()
+        _pspec.name().into()
     }
 
     fn set_property(
