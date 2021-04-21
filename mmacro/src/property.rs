@@ -70,8 +70,6 @@ pub(crate) fn handle_property(tit: &syn::TraitItemType) -> Property {
         proc_macro_error::abort!(tit, "gobject_signal_properties property type needed")
     }
 
-
-
     Property {
         name,
         span: syn::spanned::Spanned::span(&tit),
@@ -100,7 +98,9 @@ impl Property {
 
         match type_path_ident.to_string().as_str() {
             "bool" => quote! {new_boolean(#pname,#pname,#pname, false, ParamFlags::READWRITE)},
-            "i8" => quote! {new_char(#pname,#pname,#pname, i8::MIN, i8::MAX, 0, ParamFlags::READWRITE)},
+            "i8" => {
+                quote! {new_char(#pname,#pname,#pname, i8::MIN, i8::MAX, 0, ParamFlags::READWRITE)}
+            }
             "u8" => {
                 quote! {new_uchar(#pname,#pname,#pname, u8::MIN, u8::MAX, 0, ParamFlags::READWRITE)}
             }

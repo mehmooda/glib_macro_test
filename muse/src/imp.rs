@@ -12,6 +12,15 @@ impl ObjectSubclass for LoginWidgetImp {
     type ParentType = gtk4::Box;
 }
 
+unsafe impl<T: gtk4::subclass::box_::BoxImpl> IsSubclassable<T> for super::MyWidget {
+    fn class_init(class: &mut glib::Class<Self>) {
+        <gtk4::Box as IsSubclassable<T>>::class_init(class.upcast_ref_mut::<gtk4::Box>());
+    }
+    fn instance_init(instance: &mut glib::subclass::InitializingObject<T>) {
+        <gtk4::Box as IsSubclassable<T>>::instance_init(instance);
+    }
+}
+
 impl gtk4::subclass::box_::BoxImpl for LoginWidgetImp {}
 
 impl gtk4::subclass::widget::WidgetImpl for LoginWidgetImp {}

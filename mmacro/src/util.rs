@@ -37,22 +37,68 @@ impl TurnOptionIntoInner for syn::Type {
     }
 }
 
+use proc_macro2::{Span, TokenStream};
+use proc_macro_crate::crate_name;
+use quote::quote;
+use syn::Ident;
+
+const KNOWN_GLIB_EXPORTS: [&'static str; 14] = [
+    // Current Re-exports from gtk-rs
+    "gtk",
+    "gio",
+    "gdk",
+    "gdk-pixbuf",
+    "gdkx11",
+    "graphene",
+    "pango",
+    "pangocairo",
+    // Current Re-exports from gtk4-rs
+    "gtk4",
+    "gsk4",
+    "gdk4",
+    "gdk4-wayland",
+    "gdk4-x11",
+    // Special Request
+    "gstreamer",
+];
+
+pub fn crate_ident_new() -> TokenStream {
+    use proc_macro_crate::FoundCrate;
+
+    let crate_path = match crate_name("glib") {
+        Ok(FoundCrate::Name(name)) => Some(quote!(::#name)),
+        Ok(FoundCrate::Itself) => Some(quote!(::glib)),
+        Err(_) => None,
+    };
+
+    let crate_path = crate_path.or_else(|| {
+        KNOWN_GLIB_EXPORTS.iter().find_map(|c| {
+            if let Ok(f) = crate_name(c) {
+                let crate_name = match f {
+                    FoundCrate::Name(name) => name,
+                    FoundCrate::Itself => c.to_string(),
+                };
+                let crate_root = Ident::new(&crate_name, Span::call_site());
+                Some(quote::quote! {
+                    ::#crate_root::glib
+                })
+            } else {
+                None
+            }
+        })
+    });
+
+    crate_path.unwrap_or_else(|| {
+        proc_macro_error::emit_call_site_warning!(
+            "Can't find glib crate. Please ensure you have a glib in scope"
+        );
+        let glib = Ident::new("glib", Span::call_site());
+        quote!(#glib)
+    })
+}
+
 pub fn get_glib() -> proc_macro2::TokenStream {
-    use proc_macro_crate::*;
-
-    let found_crate = crate_name("glib");
-    if let Ok(s) = found_crate {
-        let s = syn::Ident::new(&s, proc_macro2::Span::call_site());
-        return quote::quote!( #s );
-    }
-
-    let found_crate = crate_name("gtk4");
-    if let Ok(s) = found_crate {
-        let s = syn::Ident::new(&s, proc_macro2::Span::call_site());
-        return quote::quote!( ::#s::glib );
-    }
-
-    panic!("Unable to find glib")
+    crate_ident_new()
 }
 
 pub struct ParamSpecName(String);
