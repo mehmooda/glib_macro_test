@@ -174,7 +174,7 @@ pub(crate) fn implementations(properties: &[Property]) -> TokenStream {
     quote! {
         #(
             fn #property_func_name (&self) -> #property_type {
-               #glib ::ObjectExt::property(self, #pname ).unwrap().get().unwrap().unwrap()
+               #glib ::ObjectExt::property(self, #pname ).unwrap().get().unwrap()
             }
         )*
     }

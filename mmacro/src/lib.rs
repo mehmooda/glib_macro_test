@@ -123,11 +123,15 @@ fn gobject_signal_properties_impl(
                 }
 
                 pub trait #objectext {
+                    type ThisClass: #glib::IsA<#object>;
+
                     #pdef
                     #sdef
                 }
 
                 impl<T: #glib::IsA<#object>> #objectext for T {
+                    type ThisClass = #object;
+
                     #pimpl
                     #simpl
                 }
