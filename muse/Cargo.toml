@@ -8,4 +8,4 @@ edition = "2018"
 
 [dependencies]
 mmacro = { path="../mmacro" }
-gtk4 = {git = "https://github.com/gtk-rs/gtk4-rs"}
+gtk4 = {git = "https://github.com/sdroege/gtk4-rs", branch="value-trait-refactoring"}
