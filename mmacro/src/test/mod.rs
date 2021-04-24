@@ -1,6 +1,6 @@
 use std::io::{Read, Write};
 
-use quote::{ToTokens, quote};
+use quote::{quote, ToTokens};
 
 fn catch_unwind_silent_in_proc_macro_error<
     F: FnOnce() -> R + std::panic::UnwindSafe,
@@ -101,10 +101,13 @@ fn gitdiff(code: &str, file: &str) -> String {
 #[test]
 fn pass_in_macro() {
     catch_unwind_silent_in_proc_macro_error(|| {
-        let out = rustfmt(&crate::gobject_signal_properties_impl(
-            quote! {},
-            std::str::FromStr::from_str(include_str!("pass_in_macro.rs.in")).unwrap(),
-        ).to_string());
+        let out = rustfmt(
+            &crate::gobject_signal_properties_impl(
+                quote! {},
+                std::str::FromStr::from_str(include_str!("pass_in_macro.rs.in")).unwrap(),
+            )
+            .to_string(),
+        );
         if &out != include_str!("pass_in_macro.rs.out") {
             panic!(
                 "{}",
