@@ -57,6 +57,7 @@ mod __impl_gobject_properties_MyWidget {
     }
 }
 pub trait MyWidgetExt {
+    type ThisClass: glib::IsA<MyWidget>;
     fn get_my_property(&self) -> String;
     fn get_another_property(&self) -> String;
     fn connect_my_signal<F: Fn(&Self, i64, u32, Option<gtk4::Box>) -> gtk4::Box + 'static>(
@@ -66,11 +67,11 @@ pub trait MyWidgetExt {
     fn emit_my_signal(&self, arg1: i64, arg2: u32, arg3: Option<gtk4::Box>) -> gtk4::Box;
 }
 impl<T: glib::IsA<MyWidget>> MyWidgetExt for T {
+    type ThisClass = MyWidget;
     fn get_my_property(&self) -> String {
         glib::ObjectExt::property(self, "my-property")
             .unwrap()
             .get()
-            .unwrap()
             .unwrap()
     }
     fn get_another_property(&self) -> String {
@@ -78,27 +79,27 @@ impl<T: glib::IsA<MyWidget>> MyWidgetExt for T {
             .unwrap()
             .get()
             .unwrap()
-            .unwrap()
     }
     fn connect_my_signal<F: Fn(&Self, i64, u32, Option<gtk4::Box>) -> gtk4::Box + 'static>(
         &self,
         callback: F,
     ) {
         use glib::value::ToValue;
+        use glib::Cast;
         use glib::ObjectExt;
         self.as_ref()
             .connect_local("my-signal", false, move |args| {
                 let converted_arg = (
-                    args[0 + 1].get::<i64>().unwrap().unwrap(),
-                    args[1 + 1].get::<u32>().unwrap().unwrap(),
-                    args[2 + 1].get::<gtk4::Box>().unwrap(),
+                    args[0 + 1].get::<i64>().unwrap(),
+                    args[1 + 1].get::<u32>().unwrap(),
+                    args[2 + 1].get::<Option<gtk4::Box>>().unwrap(),
                 );
-                let ret = callback(
-                    &args[0].get().unwrap().unwrap(),
-                    converted_arg.0,
-                    converted_arg.1,
-                    converted_arg.2,
-                );
+                let obj = args[0]
+                    .get::<Self::ThisClass>()
+                    .unwrap()
+                    .downcast()
+                    .unwrap();
+                let ret = callback(&obj, converted_arg.0, converted_arg.1, converted_arg.2);
                 Some(ret.to_value())
             })
             .unwrap();
@@ -114,7 +115,6 @@ impl<T: glib::IsA<MyWidget>> MyWidgetExt for T {
             .unwrap()
             .unwrap()
             .get()
-            .unwrap()
             .unwrap()
     }
 }
