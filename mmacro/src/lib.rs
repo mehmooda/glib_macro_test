@@ -1,14 +1,17 @@
 use proc_macro::TokenStream;
-use quote::format_ident;
+use quote::{format_ident, quote};
 
 mod property;
 mod signal;
 mod util;
 
+#[cfg(test)]
+mod test;
+
 use util::*;
 
 /// # Usage
-/// ```rust
+/// ```ignore
 /// #[gobject_signal_properties]
 /// trait NewObject {
 ///    #[signal]
@@ -18,7 +21,7 @@ use util::*;
 /// }
 /// ```
 /// # Generated Code
-/// ```rust
+/// ```ignore
 /// # use glib::Object as NewObject;
 /// struct NewObjectObjectSubClassBuilder {}
 /// impl NewObjectObjectSubClassBuilder {
@@ -54,13 +57,21 @@ use util::*;
 /// Property types must be a fundamental type or Object Subclass. See
 /// [source](../src/mmacro/property.rs.html#99) for all currently supported
 /// types
+
 #[proc_macro_error::proc_macro_error]
 #[proc_macro_attribute]
 pub fn gobject_signal_properties(attr: TokenStream, _item: TokenStream) -> TokenStream {
+    gobject_signal_properties_impl(attr.into(), _item.into()).into()
+}
+
+fn gobject_signal_properties_impl(
+    attr: proc_macro2::TokenStream,
+    _item: proc_macro2::TokenStream,
+) -> proc_macro2::TokenStream {
     // Should we allow renaming of {}Ext and {}Builder items?
     handle_gsp_attributes(attr);
 
-    let parsed: Result<syn::ItemTrait, _> = syn::parse(_item);
+    let parsed: Result<syn::ItemTrait, _> = syn::parse2(_item);
     if let Err(y) = parsed {
         return y.into_compile_error().into();
     }
@@ -87,7 +98,7 @@ pub fn gobject_signal_properties(attr: TokenStream, _item: TokenStream) -> Token
     let objectbuilder = format_ident!("{}ObjectSubclassBuilder", object);
     let impl_mod = format_ident!("__impl_gobject_properties_{}", object);
 
-    quote::quote!(
+    quote!(
                 //TODO: GivePropertyBuilderName
                 struct #objectbuilder;
                 impl #objectbuilder {
@@ -121,10 +132,9 @@ pub fn gobject_signal_properties(attr: TokenStream, _item: TokenStream) -> Token
                     #simpl
                 }
             )
-    .into()
 }
 
-fn handle_gsp_attributes(attr: TokenStream) {
+fn handle_gsp_attributes(attr: proc_macro2::TokenStream) {
     if !attr.is_empty() {
         proc_macro_error::abort_call_site!(
             "gobject_signal_properties does not support extra arguments"

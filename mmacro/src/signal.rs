@@ -10,7 +10,7 @@ pub(crate) struct Signal {
     name: crate::ParamSpecName,
     inputs: Vec<FnArg>,
     output: syn::Type,
-    //
+    default: Option<syn::Block>,
 }
 
 pub(crate) fn handle_signal(tim: &syn::TraitItemMethod) -> Signal {
@@ -22,6 +22,8 @@ pub(crate) fn handle_signal(tim: &syn::TraitItemMethod) -> Signal {
             "gobject_signal_properties: Missing signal attribute"
         )
     }
+
+    let default = tim.default.clone();
 
     if let Some(b) = &tim.default {
         proc_macro_error::abort!(
@@ -36,6 +38,7 @@ pub(crate) fn handle_signal(tim: &syn::TraitItemMethod) -> Signal {
         name,
         inputs,
         output,
+        default,
     }
 }
 
@@ -330,6 +333,20 @@ pub(crate) fn implementations(signals: &[Signal]) -> TokenStream {
     }
 }
 
+fn class_handler(signal: &Signal) -> TokenStream {
+    if signal.default.is_none() {
+        return quote! {};
+    }
+
+    let _x = signal.default.as_ref().unwrap();
+
+    quote! {
+        .class_handler(
+            ||
+        )
+    }
+}
+
 pub(crate) fn builder(signals: &[Signal]) -> TokenStream {
     let glib = super::get_glib();
     // TODO: Parse property type and call correct paramspec builder for type
@@ -347,6 +364,8 @@ pub(crate) fn builder(signals: &[Signal]) -> TokenStream {
 
     let out = signals.iter().map(|s| s.output.inner_if_option());
 
+    let class_handler = signals.iter().map(class_handler);
+
     quote! {
         fn signals() -> &'static [#glib ::subclass::Signal] {
             static SIGNALS: #glib ::once_cell::sync::OnceCell<Vec<#glib ::subclass::Signal>> = #glib ::once_cell::sync::OnceCell::new();
@@ -360,7 +379,11 @@ pub(crate) fn builder(signals: &[Signal]) -> TokenStream {
                         ),*
                     ],
                     <#out as #glib ::types::StaticType>::static_type().into()
-                ).build()
+                )
+
+                #class_handler
+
+                .build()
             ),*])
         }
     }
