@@ -1,0 +1,8 @@
+trait MyWidget {
+    #[signal]
+    fn my_signal(&self, arg1: i64, arg2: u32, arg3: Option<gtk4::Box>) -> gtk4::Box;
+    #[property]
+    type my_property = String;
+    #[property]
+    type another_property = String;
+}

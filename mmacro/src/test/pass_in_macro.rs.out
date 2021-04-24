@@ -1,0 +1,120 @@
+struct MyWidgetObjectSubclassBuilder;
+impl MyWidgetObjectSubclassBuilder {
+    fn properties() -> &'static [glib::ParamSpec] {
+        use glib::ParamFlags;
+        use glib::StaticType;
+        static PROPERTIES: glib::once_cell::sync::OnceCell<Vec<glib::ParamSpec>> =
+            glib::once_cell::sync::OnceCell::new();
+        PROPERTIES.get_or_init(|| {
+            vec![
+                glib::ParamSpec::new_string(
+                    "my-property",
+                    "my-property",
+                    "my-property",
+                    None,
+                    ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::new_string(
+                    "another-property",
+                    "another-property",
+                    "another-property",
+                    None,
+                    ParamFlags::READWRITE,
+                ),
+            ]
+        })
+    }
+    fn signals() -> &'static [glib::subclass::Signal] {
+        static SIGNALS: glib::once_cell::sync::OnceCell<Vec<glib::subclass::Signal>> =
+            glib::once_cell::sync::OnceCell::new();
+        SIGNALS.get_or_init(|| {
+            vec![glib::subclass::Signal::builder(
+                "my-signal",
+                &[
+                    <i64 as glib::types::StaticType>::static_type().into(),
+                    <u32 as glib::types::StaticType>::static_type().into(),
+                    <gtk4::Box as glib::types::StaticType>::static_type().into(),
+                ],
+                <gtk4::Box as glib::types::StaticType>::static_type().into(),
+            )
+            .build()]
+        })
+    }
+}
+impl MyWidget {}
+mod __impl_gobject_properties_MyWidget {
+    #![allow(non_snake_case)]
+    fn verify_is_glib_object<T: glib::IsA<glib::Object>>() {}
+    fn verify_is_glib_StaticType<T: glib::StaticType>() {}
+    fn test() {
+        verify_is_glib_object::<super::MyWidget>();
+        verify_is_glib_StaticType::<String>();
+        verify_is_glib_StaticType::<String>();
+        verify_is_glib_StaticType::<gtk4::Box>();
+        verify_is_glib_StaticType::<i64>();
+        verify_is_glib_StaticType::<u32>();
+        verify_is_glib_StaticType::<gtk4::Box>();
+    }
+}
+pub trait MyWidgetExt {
+    fn get_my_property(&self) -> String;
+    fn get_another_property(&self) -> String;
+    fn connect_my_signal<F: Fn(&Self, i64, u32, Option<gtk4::Box>) -> gtk4::Box + 'static>(
+        &self,
+        callback: F,
+    );
+    fn emit_my_signal(&self, arg1: i64, arg2: u32, arg3: Option<gtk4::Box>) -> gtk4::Box;
+}
+impl<T: glib::IsA<MyWidget>> MyWidgetExt for T {
+    fn get_my_property(&self) -> String {
+        glib::ObjectExt::property(self, "my-property")
+            .unwrap()
+            .get()
+            .unwrap()
+            .unwrap()
+    }
+    fn get_another_property(&self) -> String {
+        glib::ObjectExt::property(self, "another-property")
+            .unwrap()
+            .get()
+            .unwrap()
+            .unwrap()
+    }
+    fn connect_my_signal<F: Fn(&Self, i64, u32, Option<gtk4::Box>) -> gtk4::Box + 'static>(
+        &self,
+        callback: F,
+    ) {
+        use glib::value::ToValue;
+        use glib::ObjectExt;
+        self.as_ref()
+            .connect_local("my-signal", false, move |args| {
+                let converted_arg = (
+                    args[0 + 1].get::<i64>().unwrap().unwrap(),
+                    args[1 + 1].get::<u32>().unwrap().unwrap(),
+                    args[2 + 1].get::<gtk4::Box>().unwrap(),
+                );
+                let ret = callback(
+                    &args[0].get().unwrap().unwrap(),
+                    converted_arg.0,
+                    converted_arg.1,
+                    converted_arg.2,
+                );
+                Some(ret.to_value())
+            })
+            .unwrap();
+    }
+    fn emit_my_signal(&self, arg1: i64, arg2: u32, arg3: Option<gtk4::Box>) -> gtk4::Box {
+        use glib::value::ToValue;
+        use glib::ObjectExt;
+        self.as_ref()
+            .emit_by_name_with_values(
+                "my-signal",
+                &[arg1.to_value(), arg2.to_value(), arg3.to_value()],
+            )
+            .unwrap()
+            .unwrap()
+            .get()
+            .unwrap()
+            .unwrap()
+    }
+}
