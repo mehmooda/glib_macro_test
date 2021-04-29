@@ -82,6 +82,7 @@ fn gobject_signal_properties_impl(
     let (signals, properties) = gsp_parse_signals_and_properties(&item_trait);
 
     let glib = get_glib();
+    let object = item_trait.ident;
 
     let pverify = property::verifications(&properties);
     let pdef = property::definitions(&properties);
@@ -90,52 +91,49 @@ fn gobject_signal_properties_impl(
 
     let sverify = signal::verifications(&signals);
     let sdef = signal::definitions(&signals);
-    let simpl = signal::implementations(&signals);
-    let sbuilder = signal::builder(&signals);
+    let simpl = signal::implementations(&signals, &object);
+    let sbuilder = signal::builder(&signals, &object);
 
-    let object = item_trait.ident;
     let objectext = format_ident!("{}Ext", object);
     let objectbuilder = format_ident!("{}ObjectSubclassBuilder", object);
     let impl_mod = format_ident!("__impl_gobject_properties_{}", object);
 
     quote!(
-                //TODO: GivePropertyBuilderName
-                struct #objectbuilder;
-                impl #objectbuilder {
-                   #pbuilder
-                   #sbuilder
-                }
-
-                // Will ensure object is a defined type or error;
-                impl #object {}
-
-                mod #impl_mod {
-                    #![allow(non_snake_case)]
-                    fn verify_is_glib_object<T: #glib::IsA<#glib::Object>>(){}
-                    fn verify_is_glib_StaticType<T: #glib::StaticType>(){}
-    //                fn verify_is_glib_ToValueOptional<T: #glib::value::ToValue>(){}
-
-                    fn test() {
-                        verify_is_glib_object::<super::#object>();
-                        #pverify
-                        #sverify
+                    //TODO: GivePropertyBuilderName
+                    struct #objectbuilder;
+                    impl #objectbuilder {
+                       #pbuilder
+                       #sbuilder
                     }
-                }
 
-                pub trait #objectext {
-                    type ThisClass: #glib::IsA<#object>;
+                    // Will ensure object is a defined type or error;
+                    impl #object {}
 
-                    #pdef
-                    #sdef
-                }
+                    mod #impl_mod {
+                        #![allow(non_snake_case)]
+                        fn verify_is_glib_object<T: #glib::IsA<#glib::Object>>(){}
+                        fn verify_is_glib_StaticType<T: #glib::StaticType>(){}
+        //                fn verify_is_glib_ToValueOptional<T: #glib::value::ToValue>(){}
 
-                impl<T: #glib::IsA<#object>> #objectext for T {
-                    type ThisClass = #object;
+                        fn test() {
+                            verify_is_glib_object::<super::#object>();
+                            #pverify
+                            #sverify
+                        }
+                    }
 
-                    #pimpl
-                    #simpl
-                }
-            )
+                    pub trait #objectext {
+    //                    type ThisClass: #glib::IsA<#object>;
+
+                        #pdef
+                        #sdef
+                    }
+
+                    impl<T: #glib::IsA<#object>> #objectext for T {
+                        #pimpl
+                        #simpl
+                    }
+                )
 }
 
 fn handle_gsp_attributes(attr: proc_macro2::TokenStream) {

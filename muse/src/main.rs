@@ -1,5 +1,6 @@
+use gtk4::subclass::prelude::{ObjectImplExt, ObjectSubclassExt};
 use mmacro::gobject_signal_properties;
-use gtk4::glib;
+//use gtk4::glib;
 
 mod imp;
 mod imp2;
@@ -17,7 +18,13 @@ gtk4::glib::wrapper! {
 #[gobject_signal_properties]
 trait MyWidget {
     #[signal]
-    fn my_signal(&self, arg1: i64, arg2: u32, arg3: Option<gtk4::Box>) -> gtk4::Box;
+    fn my_signal(&self, arg1: i64, arg2: u32, arg3: Option<gtk4::Box>) -> gtk4::Box {
+        let imp = imp::LoginWidgetImp::from_instance(&obj);
+        println!("class_handler called");
+        let ret = gtk4::glib::Object::new(&[]).unwrap();
+        imp.signal_chain_from_overridden(token, values);
+        ret
+    }
     #[property]
     type my_property = String;
     #[property]
@@ -69,8 +76,8 @@ fn main() {
     use gtk4::glib::object::Cast;
     let ret = x.emit_my_signal(1, 2, Some(x.clone().upcast()));
     dbg!(ret);
-/* 
-    let y = x.get_my_other_property();
-    let z = x.get_another_other_property();
-*/
+    /*
+        let y = x.get_my_other_property();
+        let z = x.get_another_other_property();
+    */
 }

@@ -1,8 +1,8 @@
-#![allow(dead_code, unreachable_code)]
+//#![allow(dead_code, unreachable_code)]
 
 use proc_macro2::TokenStream;
 use quote::quote;
-use syn::{FnArg, ReturnType};
+use syn::{FnArg, Ident, ReturnType};
 
 use crate::TurnOptionIntoInner;
 
@@ -25,13 +25,6 @@ pub(crate) fn handle_signal(tim: &syn::TraitItemMethod) -> Signal {
 
     let default = tim.default.clone();
 
-    if let Some(b) = &tim.default {
-        proc_macro_error::abort!(
-            b,
-            "gobject_signal_properties: default class handler unimplemented"
-        )
-    }
-
     let (name, inputs, output) = parse_signal_definition(&tim.sig);
 
     Signal {
@@ -45,7 +38,7 @@ pub(crate) fn handle_signal(tim: &syn::TraitItemMethod) -> Signal {
 #[derive(Default)]
 struct SignalAttributes {
     magic: bool,
-    class_handler_flags: bool,
+    _class_handler_flags: bool,
 }
 
 fn parse_signal_attributes(attrs: &[syn::Attribute]) -> SignalAttributes {
@@ -226,21 +219,7 @@ fn convert_ret(signal: &Signal) -> TokenStream {
     };
 }
 
-fn handle_emit_option(signal: &Signal) -> TokenStream {
-    if signal.output == syn::parse2(quote!(())).unwrap() {
-        return quote!(.map(|o| panic!("Expected Unit found {}", o.type_())););
-    }
-    if signal.output.is_option() {
-        return quote! {
-            .map(|z| z.get().unwrap().unwrap())
-        };
-    }
-    return quote! {
-        .unwrap().get().unwrap().unwrap()
-    };
-}
-
-pub(crate) fn implementations(signals: &[Signal]) -> TokenStream {
+pub(crate) fn implementations(signals: &[Signal], object: &Ident) -> TokenStream {
     let glib = super::get_glib();
 
     let signal = signals.iter().map(|s| s.name.kebab_case());
@@ -251,34 +230,11 @@ pub(crate) fn implementations(signals: &[Signal]) -> TokenStream {
         .iter()
         .map(|s| quote::format_ident!("emit_{}", s.name.snake_case()));
     let args = signals.iter().map(|s| &s.inputs);
-    let arg_types = signals
-        .iter()
-        .map(|s| {
-            s.inputs
-                .iter()
-                .map(|i| match i {
-                    FnArg::Typed(p) => p.ty.clone(),
-                    _ => unreachable!(),
-                })
-                .collect::<Vec<_>>()
-        })
-        .collect::<Vec<_>>();
+    let arg_types = signals.iter().map(arg_types);
 
-//    let inner_arg_types = arg_types
-//        .iter()
-//        .map(|x| x.iter().map(|z| z.inner_if_option()).collect::<Vec<_>>());
-    let unwrap_if_inner = arg_types.iter().map(|z| {
-        z.iter()
-            .map(|t| !t.is_option())
-            .map(|t| {
-                if t {
-                    quote! {.unwrap()}
-                } else {
-                    quote! {}
-                }
-            })
-            .collect::<Vec<_>>()
-    });
+    //    let inner_arg_types = arg_types
+    //        .iter()
+    //        .map(|x| x.iter().map(|z| z.inner_if_option()).collect::<Vec<_>>());
     let numbers = (0..signals.len()).map(|z| {
         (0..signals[z].inputs.len())
             .map(syn::Index::from)
@@ -300,7 +256,6 @@ pub(crate) fn implementations(signals: &[Signal]) -> TokenStream {
         .map(|s| s.inputs.iter().map(get_name).collect::<Vec<_>>());
 
     let convert_ret = signals.iter().map(convert_ret);
-    let handle_emit_option = signals.iter().map(handle_emit_option);
 
     quote! {
         #(
@@ -308,15 +263,15 @@ pub(crate) fn implementations(signals: &[Signal]) -> TokenStream {
                 use #glib ::value::ToValue;
                 use #glib ::ObjectExt;
                 use #glib ::Cast;
-                
+
                 self.as_ref().connect_local(#signal, false, move |args| {
                     let converted_arg = (
                         #(
                             args[#numbers + 1].get::<#arg_types>().unwrap()
                         ),*
                     ,);
-                    
-                    let obj = args[0].get::<Self::ThisClass>().unwrap().downcast().unwrap();
+
+                    let obj = args[0].get::<#object>().unwrap().downcast().unwrap();
 
                     let ret = callback(&obj,#(converted_arg. #numbers),*);
                     #convert_ret
@@ -336,21 +291,53 @@ pub(crate) fn implementations(signals: &[Signal]) -> TokenStream {
     }
 }
 
-fn class_handler(signal: &Signal) -> TokenStream {
-    if signal.default.is_none() {
-        return quote! {};
-    }
+fn arg_types(signal: &Signal) -> Vec<Box<syn::Type>> {
+    signal
+        .inputs
+        .iter()
+        .map(|i| match i {
+            FnArg::Typed(p) => p.ty.clone(),
+            _ => unreachable!(),
+        })
+        .collect()
+}
 
-    let _x = signal.default.as_ref().unwrap();
-
-    quote! {
-        .class_handler(
-            ||
-        )
+fn class_handler(object: &Ident) -> impl Fn(&Signal) -> TokenStream {
+    let object = object.clone();
+    move |signal| {
+        if signal.default.is_none() {
+            return quote! {};
+        }
+        let x = signal.default.as_ref().unwrap();
+        let glib = crate::util::get_glib();
+        let number = (0..signal.inputs.len()).map(syn::Index::from);
+        let number2 = (0..signal.inputs.len()).map(syn::Index::from);
+        let args = &signal.inputs;
+        let arg_types = arg_types(signal);
+        let ret = &signal.output;
+        let convert_ret = convert_ret(signal);
+        quote! {
+            .class_handler(
+                |token, values| {
+                    use #glib ::ToValue;
+                    let converted_arg = (
+                        #(
+                            values[#number + 1].get::<#arg_types>().unwrap()
+                        ),*
+                    );
+                    let obj = values[0].get::<#object>().unwrap();
+                    let ret: #ret = (|obj: #object, #(#args),*|
+                        #x
+                    )
+                    (obj, #(converted_arg.#number2),*);
+                    #convert_ret
+                }
+            )
+        }
     }
 }
 
-pub(crate) fn builder(signals: &[Signal]) -> TokenStream {
+pub(crate) fn builder(signals: &[Signal], object: &Ident) -> TokenStream {
     let glib = super::get_glib();
     // TODO: Parse property type and call correct paramspec builder for type
     let signal_name = signals.iter().map(|x| x.name.kebab_case());
@@ -367,7 +354,7 @@ pub(crate) fn builder(signals: &[Signal]) -> TokenStream {
 
     let out = signals.iter().map(|s| s.output.inner_if_option());
 
-    let class_handler = signals.iter().map(class_handler);
+    let class_handler = signals.iter().map(class_handler(object));
 
     quote! {
         fn signals() -> &'static [#glib ::subclass::Signal] {

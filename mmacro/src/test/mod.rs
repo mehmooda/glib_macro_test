@@ -1,6 +1,6 @@
 use std::io::{Read, Write};
 
-use quote::{quote, ToTokens};
+use quote::quote;
 
 fn catch_unwind_silent_in_proc_macro_error<
     F: FnOnce() -> R + std::panic::UnwindSafe,
